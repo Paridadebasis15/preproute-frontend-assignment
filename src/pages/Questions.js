@@ -82,13 +82,13 @@ export default function Questions() {
     setSelectedIndex(index);
     reset(questions[index]);
   };
-  const deleteQuestion = (index) => {
-    dispatch({ type: "DELETE_QUESTION", payload: index });
-    if (selectedIndex === index) {
-      setSelectedIndex(null);
-      reset(defaults);
-    }
-  };
+  // const deleteQuestion = (index) => {
+  //   dispatch({ type: "DELETE_QUESTION", payload: index });
+  //   if (selectedIndex === index) {
+  //     setSelectedIndex(null);
+  //     reset(defaults);
+  //   }
+  // };
   const saveAndContinue = async () => {
     if (!questions.length) {
       setApiError("Add at least one question before continuing.");
