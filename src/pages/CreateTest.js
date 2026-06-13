@@ -68,15 +68,12 @@ export default function CreateTest() {
 
   const selectedSubject = watch("subject");
   const selectedTopicsRaw = watch("topics");
-  // Memoize selectedTopics to avoid new array reference on every render
+  // Memoize selectedTopics to keep reference stable
   const selectedTopics = useMemo(() => selectedTopicsRaw || [], [selectedTopicsRaw]);
   const selectedType = watch("type");
 
-  const selectedTopicsKey = useMemo(
-    () => selectedTopics.join(","),
-    [selectedTopics]
-  );
-
+  // Remove selectedTopicsKey – compute the key inside the effect instead
+  // to avoid a complex expression in dependency array
   useEffect(() => {
     const loadSubjects = async () => {
       try {
@@ -85,7 +82,6 @@ export default function CreateTest() {
         setApiError(getApiErrorMessage(err, "Unable to load subjects"));
       }
     };
-
     loadSubjects();
   }, []);
 
@@ -113,6 +109,7 @@ export default function CreateTest() {
     loadTopics();
   }, [selectedSubject, setValue]);
 
+  // Fixed useEffect: no complex expression in dependency array
   useEffect(() => {
     if (!selectedTopics.length) {
       setSubTopics([]);
@@ -122,10 +119,13 @@ export default function CreateTest() {
     const loadSubTopics = async () => {
       setValue("sub_topics", []);
 
+      // Compute the key inside the effect – avoids a dependency on a derived variable
+      const key = selectedTopics.join(",");
+
       try {
         setSubTopics(
           unwrapData(
-            await getCached(`subtopics-${selectedTopicsKey}`, () =>
+            await getCached(`subtopics-${key}`, () =>
               getSubTopicsByMultiTopicsApi(selectedTopics)
             )
           ) || []
@@ -136,7 +136,7 @@ export default function CreateTest() {
     };
 
     loadSubTopics();
-  }, [selectedTopics, selectedTopicsKey, setValue]);
+  }, [selectedTopics, setValue]); // Only depends on selectedTopics and stable setValue
 
   const loadTest = useCallback(async () => {
     if (!id) return;
