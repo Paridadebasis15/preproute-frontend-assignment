@@ -72,8 +72,6 @@ export default function CreateTest() {
   const selectedTopics = useMemo(() => selectedTopicsRaw || [], [selectedTopicsRaw]);
   const selectedType = watch("type");
 
-  // Remove selectedTopicsKey – compute the key inside the effect instead
-  // to avoid a complex expression in dependency array
   useEffect(() => {
     const loadSubjects = async () => {
       try {
@@ -105,11 +103,9 @@ export default function CreateTest() {
         setApiError(getApiErrorMessage(err, "Unable to load topics"));
       }
     };
-
     loadTopics();
   }, [selectedSubject, setValue]);
 
-  // Fixed useEffect: no complex expression in dependency array
   useEffect(() => {
     if (!selectedTopics.length) {
       setSubTopics([]);
@@ -118,10 +114,7 @@ export default function CreateTest() {
 
     const loadSubTopics = async () => {
       setValue("sub_topics", []);
-
-      // Compute the key inside the effect – avoids a dependency on a derived variable
       const key = selectedTopics.join(",");
-
       try {
         setSubTopics(
           unwrapData(
@@ -134,18 +127,14 @@ export default function CreateTest() {
         setApiError(getApiErrorMessage(err, "Unable to load sub topics"));
       }
     };
-
     loadSubTopics();
-  }, [selectedTopics, setValue]); // Only depends on selectedTopics and stable setValue
+  }, [selectedTopics, setValue]);
 
   const loadTest = useCallback(async () => {
     if (!id) return;
-
     setPageLoading(true);
-
     try {
       const test = unwrapData(await getTestByIdApi(id));
-
       reset({
         ...defaults,
         ...test,
@@ -153,7 +142,6 @@ export default function CreateTest() {
         topics: test?.topics || [],
         sub_topics: test?.sub_topics || [],
       });
-
       dispatch({ type: "SET_TEST", payload: test });
     } catch (err) {
       setApiError(getApiErrorMessage(err, "Unable to load test"));
@@ -169,7 +157,6 @@ export default function CreateTest() {
   const onSubmit = async (values) => {
     setLoading(true);
     setApiError("");
-
     const payload = {
       ...values,
       total_time: Number(values.total_time),
@@ -180,14 +167,11 @@ export default function CreateTest() {
       unattempt_marks: Number(values.unattempt_marks),
       status: "draft",
     };
-
     try {
       const response = id
         ? await updateTestApi(id, payload)
         : await createTestApi(payload);
-
       const test = unwrapData(response);
-
       dispatch({ type: "SET_TEST", payload: test });
       navigate(`/tests/${test?.id || id}/questions`);
     } catch (err) {

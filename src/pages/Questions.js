@@ -82,7 +82,7 @@ export default function Questions() {
     setSelectedIndex(index);
     reset(questions[index]);
   };
-  // Remove the unused deleteQuestion function (commented out)
+  // deleteQuestion is currently unused; can be uncommented if needed later
   // const deleteQuestion = (index) => {
   //   dispatch({ type: "DELETE_QUESTION", payload: index });
   //   if (selectedIndex === index) {
