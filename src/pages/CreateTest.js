@@ -21,25 +21,13 @@ const schema = yup.object({
   subject: yup.string().required("Subject is required"),
   topics: yup.array().min(1, "Select at least one topic"),
   sub_topics: yup.array().min(1, "Select at least one sub topic"),
-  total_time: yup
-    .number()
-    .typeError("Duration is required")
-    .positive("Enter valid duration")
-    .required(),
+  total_time: yup.number().typeError("Duration is required").positive("Enter valid duration").required(),
   difficulty: yup.string().required("Difficulty is required"),
   wrong_marks: yup.number().typeError("Wrong marks required").required(),
   unattempt_marks: yup.number().typeError("Unattempted marks required").required(),
   correct_marks: yup.number().typeError("Correct marks required").required(),
-  total_questions: yup
-    .number()
-    .typeError("No of questions required")
-    .positive()
-    .required(),
-  total_marks: yup
-    .number()
-    .typeError("Total marks required")
-    .positive()
-    .required(),
+  total_questions: yup.number().typeError("No of questions required").positive().required(),
+  total_marks: yup.number().typeError("Total marks required").positive().required(),
 });
 
 const defaults = {
@@ -76,28 +64,23 @@ export default function CreateTest() {
     watch,
     reset,
     formState: { errors },
-  } = useForm({
-    resolver: yupResolver(schema),
-    defaultValues: defaults,
-  });
+  } = useForm({ resolver: yupResolver(schema), defaultValues: defaults });
 
   const selectedSubject = watch("subject");
-  const watchedTopics = watch("topics");
+  const selectedTopicsRaw = watch("topics");
+  // Memoize selectedTopics to avoid new array reference on every render
+  const selectedTopics = useMemo(() => selectedTopicsRaw || [], [selectedTopicsRaw]);
   const selectedType = watch("type");
 
-  const selectedTopics = useMemo(() => {
-    return Array.isArray(watchedTopics) ? watchedTopics : [];
-  }, [watchedTopics]);
-
-  const selectedTopicsKey = useMemo(() => {
-    return selectedTopics.join(",");
-  }, [selectedTopics]);
+  const selectedTopicsKey = useMemo(
+    () => selectedTopics.join(","),
+    [selectedTopics]
+  );
 
   useEffect(() => {
     const loadSubjects = async () => {
       try {
-        const response = await getCached("subjects", getSubjectsApi);
-        setSubjects(unwrapData(response) || []);
+        setSubjects(unwrapData(await getCached("subjects", getSubjectsApi)) || []);
       } catch (err) {
         setApiError(getApiErrorMessage(err, "Unable to load subjects"));
       }
@@ -107,11 +90,7 @@ export default function CreateTest() {
   }, []);
 
   useEffect(() => {
-    if (!selectedSubject) {
-      setTopics([]);
-      setSubTopics([]);
-      return;
-    }
+    if (!selectedSubject) return;
 
     const loadTopics = async () => {
       setValue("topics", []);
@@ -119,11 +98,13 @@ export default function CreateTest() {
       setSubTopics([]);
 
       try {
-        const response = await getCached(`topics-${selectedSubject}`, () =>
-          getTopicsBySubjectApi(selectedSubject)
+        setTopics(
+          unwrapData(
+            await getCached(`topics-${selectedSubject}`, () =>
+              getTopicsBySubjectApi(selectedSubject)
+            )
+          ) || []
         );
-
-        setTopics(unwrapData(response) || []);
       } catch (err) {
         setApiError(getApiErrorMessage(err, "Unable to load topics"));
       }
@@ -133,29 +114,29 @@ export default function CreateTest() {
   }, [selectedSubject, setValue]);
 
   useEffect(() => {
-    if (!selectedTopicsKey) {
+    if (!selectedTopics.length) {
       setSubTopics([]);
       return;
     }
-
-    const topicIds = selectedTopicsKey.split(",").filter(Boolean);
 
     const loadSubTopics = async () => {
       setValue("sub_topics", []);
 
       try {
-        const response = await getCached(`subtopics-${selectedTopicsKey}`, () =>
-          getSubTopicsByMultiTopicsApi(topicIds)
+        setSubTopics(
+          unwrapData(
+            await getCached(`subtopics-${selectedTopicsKey}`, () =>
+              getSubTopicsByMultiTopicsApi(selectedTopics)
+            )
+          ) || []
         );
-
-        setSubTopics(unwrapData(response) || []);
       } catch (err) {
         setApiError(getApiErrorMessage(err, "Unable to load sub topics"));
       }
     };
 
     loadSubTopics();
-  }, [selectedTopicsKey, setValue]);
+  }, [selectedTopics, selectedTopicsKey, setValue]);
 
   const loadTest = useCallback(async () => {
     if (!id) return;
@@ -163,15 +144,14 @@ export default function CreateTest() {
     setPageLoading(true);
 
     try {
-      const response = await getTestByIdApi(id);
-      const test = unwrapData(response);
+      const test = unwrapData(await getTestByIdApi(id));
 
       reset({
         ...defaults,
         ...test,
         subject: test?.subject?.id || test?.subject || "",
-        topics: Array.isArray(test?.topics) ? test.topics : [],
-        sub_topics: Array.isArray(test?.sub_topics) ? test.sub_topics : [],
+        topics: test?.topics || [],
+        sub_topics: test?.sub_topics || [],
       });
 
       dispatch({ type: "SET_TEST", payload: test });
@@ -192,8 +172,6 @@ export default function CreateTest() {
 
     const payload = {
       ...values,
-      topics: Array.isArray(values.topics) ? values.topics : [],
-      sub_topics: Array.isArray(values.sub_topics) ? values.sub_topics : [],
       total_time: Number(values.total_time),
       total_questions: Number(values.total_questions),
       total_marks: Number(values.total_marks),
@@ -219,15 +197,11 @@ export default function CreateTest() {
     }
   };
 
-  if (pageLoading) {
-    return <PageLoader label="Loading test..." />;
-  }
+  if (pageLoading) return <PageLoader label="Loading test..." />;
 
   return (
     <div className="page-fade create-page">
-      <p className="breadcrumb-text">
-        Test Creation / Create Test / Chapter Wise
-      </p>
+      <p className="breadcrumb-text">Test Creation / Create Test / Chapter Wise</p>
 
       <form onSubmit={handleSubmit(onSubmit)}>
         <div className="tabs-card">
@@ -250,9 +224,9 @@ export default function CreateTest() {
             <label>Subject</label>
             <select className="form-select" {...register("subject")}>
               <option value="">Choose from Drop-down</option>
-              {subjects.map((subject) => (
-                <option key={subject.id} value={subject.id}>
-                  {subject.name}
+              {subjects.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
                 </option>
               ))}
             </select>
@@ -277,9 +251,9 @@ export default function CreateTest() {
               {...register("topics")}
               disabled={!topics.length}
             >
-              {topics.map((topic) => (
-                <option key={topic.id} value={topic.id}>
-                  {topic.name}
+              {topics.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
                 </option>
               ))}
             </select>
@@ -294,9 +268,9 @@ export default function CreateTest() {
               {...register("sub_topics")}
               disabled={!subTopics.length}
             >
-              {subTopics.map((subTopic) => (
-                <option key={subTopic.id} value={subTopic.id}>
-                  {subTopic.name}
+              {subTopics.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
                 </option>
               ))}
             </select>
@@ -316,14 +290,10 @@ export default function CreateTest() {
           <div>
             <label>Test Difficulty Level</label>
             <div className="radio-row">
-              {DIFFICULTIES.map((difficulty) => (
-                <label key={difficulty.value}>
-                  <input
-                    type="radio"
-                    value={difficulty.value}
-                    {...register("difficulty")}
-                  />{" "}
-                  {difficulty.label}
+              {DIFFICULTIES.map((d) => (
+                <label key={d.value}>
+                  <input type="radio" value={d.value} {...register("difficulty")} />{" "}
+                  {d.label}
                 </label>
               ))}
             </div>
@@ -335,29 +305,17 @@ export default function CreateTest() {
         <div className="form-grid five-col">
           <div>
             <label>Wrong Answer</label>
-            <input
-              className="form-control"
-              type="number"
-              {...register("wrong_marks")}
-            />
+            <input className="form-control" type="number" {...register("wrong_marks")} />
           </div>
 
           <div>
             <label>Unattempted</label>
-            <input
-              className="form-control"
-              type="number"
-              {...register("unattempt_marks")}
-            />
+            <input className="form-control" type="number" {...register("unattempt_marks")} />
           </div>
 
           <div>
             <label>Correct Answer</label>
-            <input
-              className="form-control"
-              type="number"
-              {...register("correct_marks")}
-            />
+            <input className="form-control" type="number" {...register("correct_marks")} />
           </div>
 
           <div>
@@ -382,11 +340,7 @@ export default function CreateTest() {
         </div>
 
         <div className="form-actions">
-          <button
-            type="button"
-            className="btn btn-light"
-            onClick={() => navigate("/dashboard")}
-          >
+          <button type="button" className="btn btn-light" onClick={() => navigate("/dashboard")}>
             Cancel
           </button>
 
